@@ -14,8 +14,9 @@ An enterprise-grade automated reconciliation system (Web Agent) powered by **Bro
 
 > [!CAUTION]
 > **Avoid Rosetta 2 Architecture Pollution on Apple Silicon Macs!**
-> Luxury brand e-commerce sites possess exceptionally dense and deeply nested HTML DOM structures (often exceeding tens of thousands of lines). If your Mac Terminal or Python interpreter runs under Intel (x86_64) emulation mode via Rosetta 2, the CPU incurs massive overhead performing dynamic instruction translation during DOM tree parsing. 
-> 
+> This project standardizes on native ARM64 Python via `uv` to ensure clean dependency resolution and consistent runtime behavior across
+team members. While the dominant performance bottlenecks in this agent are network latency and LLM inference time, running under Rosetta 2 emulation adds measurable overhead to DOM parsing and package import. A native ARM64 venv eliminates this overhead and
+also avoids the dependency conflicts that arise from mixing Anaconda's globally-installed packages with project-specific ones.
 > **Impact:** Processing a single product URL under emulation takes **4 to 5 minutes**. By enforcing a **pure native Apple Silicon (aarch64/arm64)** execution space via this setup guide, DOM parsing efficiency increases 10x, reducing single-URL execution down to **20 to 40 seconds**.
 
 ---
