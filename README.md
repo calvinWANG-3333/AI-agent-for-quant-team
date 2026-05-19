@@ -99,6 +99,78 @@ uv pip install -r requirements.txt
 uv run playwright install chromium
 ```
 
+## 🔐 API Key Configuration (Required Before First Run)
+
+This agent utilizes the Anthropic Claude API via `browser-use` to drive intelligent web navigation. You must configure your Claude API key as an environment variable before running `run_demo.py`. The orchestration script will explicitly refuse to boot if the key is missing to prevent silent failures mid-run.
+
+### 1. Provision an Anthropic API Key
+If you are joining the project team, **do not reuse another developer's key**. Every engineer must provision an individual credential for audit logging and usage tracking.
+
+1. Sign in to the [Anthropic Console](https://console.anthropic.com/).
+2. Navigate to **Settings** → **API Keys** → Click **Create Key**.
+3. Copy the generated string immediately (prefixed with `sk-ant-...`). *Note: It will be permanently obscured after closing the modal.*
+
+> [!CAUTION]
+> **Credential Security Warning**
+> An API key grants direct billing privileges. **Never** hardcode it into scripts, commit it to Git repositories, share it via Slack/Teams, or expose it in unblurred screenshots.
+
+### 2. Configure the Key as an Environment Variable
+
+#### macOS / Linux (`zsh` - default on modern macOS)
+Open your shell profile configuration file in a terminal text editor:
+```bash
+nano ~/.zshrc
+```
+Append the following line at the very bottom of the file (replace the placeholder string with your verified key):
+```bash
+export ANTHROPIC_API_KEY="sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+Save and exit (`Ctrl+O` -> `Enter` -> `Ctrl+X` in nano), then source the profile to commit changes to your current session:
+```bash
+source ~/.zshrc
+```
+
+#### Windows 11 / 10 (PowerShell)
+*For the active temporary terminal session only:*
+```powershell
+$env:ANTHROPIC_API_KEY = "sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+*For permanent configuration (persists across system reboots and new shell instances):*
+```powershell
+[System.Environment]::SetEnvironmentVariable('ANTHROPIC_API_KEY', 'sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'User')
+```
+*Note: After applying the permanent registry update, completely restart PowerShell for the context switch to bind.*
+
+### 3. Verify Local Runtime Exposure
+Ensure your local virtual environment is active, then execute this diagnostics one-liner to verify variable exposure:
+```bash
+python -c "import os; k = os.environ.get('ANTHROPIC_API_KEY'); print('Key found:', bool(k), '| Starts with:', (k or '')[:10] + '...')"
+```
+
+#### Expected Diagnostics Outputs:
+* **Success Matrix:**
+  ```text
+  Key found: True | Starts with: sk-ant-api...
+  ```
+* **Failure Matrix:**
+  ```text
+  Key found: False | Starts with: ...
+  ```
+
+#### Common Root Causes & Fixes:
+* **Stale Shell Context:** Run `source ~/.zshrc` (macOS) or spawn a fresh PowerShell window (Windows).
+* **Naming Asymmetry:** Ensure the variable is capitalized exactly as `ANTHROPIC_API_KEY`.
+* **Isolation Loss:** Confirm that your shell prompt explicitly shows the `(.venv)` namespace active.
+* **Missing Scope (macOS):** Ensure you included the explicit `export ` statement prefix in `.zshrc`.
+
+### 4. Direct Client Initialization Check
+Execute a localized live client instantiation check to confirm that the API key maps successfully against Anthropic's gateway servers:
+```bash
+python -c "from browser_use.llm import ChatAnthropic; ChatAnthropic(model='claude-3-5-sonnet-latest'); print('OK: Client initialized')"
+```
+If the terminal prints `OK: Client initialized`, your integration layer is fully certified—you can proceed to `python run_demo.py`. If a handshake error or `AuthenticationError` is raised, revoke the current key and provision a clean entry from the Anthropic console.
+```
+
 ---
 
 ## 📋 Standard Dependency Ledger (`requirements.txt`)
