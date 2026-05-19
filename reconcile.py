@@ -1,16 +1,26 @@
 """
-Reconciliation logic: given outputs from Agent 1 and Agent 2,
-decide what to write to Remarks L1 and Remarks L2.
+Reconciliation logic for the SINGLE-AGENT pipeline.
 
-This module is PURE LOGIC (no I/O, no LLM, no browser).
-That makes it easy to unit-test and reason about.
+The previous version compared two independent agents (Claude + GPT-4o)
+and used price agreement as the primary signal. With only one agent
+remaining, that cross-check is no longer available, so the decision
+relies on:
 
-Business rules: see decision tables in the project blueprint.
-Anchors:
-  - Refresh data flow:   onboarding guide section 3.5.4.5
-  - Missing in crawl flow: onboarding guide section 3.5.4.3
-  - Price tolerance: 1% (both agents must agree within this band)
-  - Manual escalation: any disagreement or any nulls -> Remark L2 = "manual"
+  1. url_redirected — did the product disappear?
+  2. confidence — did the agent feel certain about what it saw?
+  3. price_found — does the price match Original Price_validated?
+
+Decision priority (top-down, first match wins):
+
+  P1. Agent says redirected + no price          -> product gone
+  P2. Agent says blocked (BLOCKED: in evidence) -> manual review
+  P3. Confidence == high AND price found        -> trust the agent
+  P4. Anything else                              -> manual review
+
+Business rules (locked with user):
+  - Price tolerance: < 1% diff counts as matching Original Price_validated
+  - Disagreement / null / medium-low confidence -> Remark L2 = "manual"
+  - Both row types preserve original Remark L1 on manual fallback
 """
 from typing import Optional, Literal
 
@@ -18,23 +28,13 @@ from typing import Optional, Literal
 # ============================================================
 # Constants
 # ============================================================
-PRICE_TOLERANCE_PCT = 1.0   # % difference still counts as "agreed"
+PRICE_TOLERANCE_PCT = 1.0   # % difference still counts as "matching"
 MANUAL_TAG = "manual"        # written to Remark L2 when human review needed
 
 
 # ============================================================
 # Helper functions
 # ============================================================
-def prices_agree(p1: Optional[float], p2: Optional[float]) -> bool:
-    """Return True if two prices are within PRICE_TOLERANCE_PCT of each other."""
-    if p1 is None or p2 is None:
-        return False
-    if p1 == 0 or p2 == 0:
-        return p1 == p2
-    diff_pct = abs(p1 - p2) / max(p1, p2) * 100
-    return diff_pct <= PRICE_TOLERANCE_PCT
-
-
 def price_matches_validated(
     agent_price: Optional[float],
     validated_price: float,
@@ -48,44 +48,88 @@ def price_matches_validated(
     return diff_pct <= PRICE_TOLERANCE_PCT
 
 
+def _format_price(price: float) -> str:
+    """Format a price number for writing to Remark L2."""
+    if price == int(price):
+        return str(int(price))
+    return f"{price:.2f}"
+
+
+def _evidence_indicates_block(evidence: Optional[str]) -> bool:
+    """Detect the 'BLOCKED:' prefix our agent uses on anti-bot pages."""
+    if not evidence:
+        return False
+    return evidence.strip().upper().startswith("BLOCKED")
+
+
 # ============================================================
-# Main reconciliation function
+# Main reconciliation function (single-agent)
 # ============================================================
 def reconcile(
     row_type: Literal["refresh_data", "missing_in_crawl"],
     original_remark_l1: Optional[str],
     validated_price: float,
-    agent_1_result: dict,
-    agent_2_result: dict,
+    agent_result: dict,
 ) -> dict:
     """
-    Decide what to write to Remarks L1 and Remarks L2.
+    Decide what to write to Remarks L1 and Remarks L2 based on a single
+    agent's output.
 
-    Logic priority (top-down):
-      1. If both agents agree on a price -> trust the price, write accordingly.
-         (This is the strongest signal; we trust it even if redirect flags
-          slightly disagree, because Claude sometimes flags SEO URL rewrites
-          as 'redirected' while GPT correctly doesn't.)
-      2. If both agents agree the product is gone (both redirected, both
-         null price) -> mark product gone.
-      3. Anything else -> manual.
+    Args:
+        row_type: "refresh_data" or "missing_in_crawl"
+        original_remark_l1: current value of Remarks L1 (e.g. "Refresh data")
+        validated_price: Original Price_validated from the Excel
+        agent_result: parsed dict from the agent
+
+    Returns:
+        {
+            "remark_l1": str or None,
+            "remark_l2": str or None,
+            "decision": str,
+            "reasoning": str,
+        }
     """
-    a1 = agent_1_result
-    a2 = agent_2_result
-
-    a1_redirected = a1.get("url_redirected", False)
-    a2_redirected = a2.get("url_redirected", False)
-    a1_price = a1.get("price_found")
-    a2_price = a2.get("price_found")
+    a = agent_result
+    redirected = a.get("url_redirected", False)
+    price = a.get("price_found")
+    confidence = a.get("confidence", "low")
+    evidence = a.get("evidence", "")
 
     # ─────────────────────────────────────────────────────────
-    # Priority 1: Both agents found a price AND prices agree
-    # → trust them, regardless of redirect flag inconsistencies.
+    # P1. Agent confirmed product is gone (redirect + no price)
     # ─────────────────────────────────────────────────────────
-    if a1_price is not None and a2_price is not None and prices_agree(a1_price, a2_price):
-        canonical_price = a1_price
+    if redirected and price is None:
+        if row_type == "refresh_data":
+            return {
+                "remark_l1": "Missing-remove",
+                "remark_l2": None,
+                "decision": "AUTO_PRODUCT_GONE",
+                "reasoning": "Agent detected redirect and no price; product gone.",
+            }
+        else:  # missing_in_crawl
+            return {
+                "remark_l1": "OK, missing",
+                "remark_l2": None,
+                "decision": "AUTO_CONFIRMED_MISSING",
+                "reasoning": "Agent confirmed product is no longer on site.",
+            }
 
-        if price_matches_validated(canonical_price, validated_price):
+    # ─────────────────────────────────────────────────────────
+    # P2. Page was blocked (anti-bot, network error, etc.)
+    # ─────────────────────────────────────────────────────────
+    if _evidence_indicates_block(evidence):
+        return {
+            "remark_l1": original_remark_l1,
+            "remark_l2": MANUAL_TAG,
+            "decision": "LOW_CONFIDENCE_BLOCKED",
+            "reasoning": f"Agent reported block: {evidence[:120]}",
+        }
+
+    # ─────────────────────────────────────────────────────────
+    # P3. High confidence + price found -> trust the agent
+    # ─────────────────────────────────────────────────────────
+    if confidence == "high" and price is not None:
+        if price_matches_validated(price, validated_price):
             # Price unchanged
             if row_type == "refresh_data":
                 return {
@@ -93,8 +137,8 @@ def reconcile(
                     "remark_l2": "Same price",
                     "decision": "AUTO_REFRESH_SAME_PRICE",
                     "reasoning": (
-                        f"Both agents found {canonical_price}, matches "
-                        f"validated price {validated_price}."
+                        f"Agent found {price} with high confidence, "
+                        f"matches validated price {validated_price}."
                     ),
                 }
             else:  # missing_in_crawl
@@ -103,21 +147,21 @@ def reconcile(
                     "remark_l2": "Same price",
                     "decision": "AUTO_MISSING_BUT_AVAILABLE_SAME_PRICE",
                     "reasoning": (
-                        f"Product is actually still available at {canonical_price}, "
-                        "matches validated price. Crawler missed it."
+                        f"Agent found {price} (matches validated), so "
+                        "product is actually still on site. Crawler missed it."
                     ),
                 }
         else:
             # Price has changed
-            new_price_str = _format_price(canonical_price)
+            new_price_str = _format_price(price)
             if row_type == "refresh_data":
                 return {
                     "remark_l1": "Refresh data",
                     "remark_l2": new_price_str,
                     "decision": "AUTO_REFRESH_NEW_PRICE",
                     "reasoning": (
-                        f"Both agents found {canonical_price}, differs from "
-                        f"validated {validated_price}."
+                        f"Agent found {price} with high confidence, "
+                        f"differs from validated {validated_price}."
                     ),
                 }
             else:  # missing_in_crawl
@@ -126,54 +170,21 @@ def reconcile(
                     "remark_l2": new_price_str,
                     "decision": "AUTO_MISSING_BUT_AVAILABLE_NEW_PRICE",
                     "reasoning": (
-                        f"Product still on site at {canonical_price}, "
-                        f"differs from validated {validated_price}."
+                        f"Agent found {price} (differs from validated "
+                        f"{validated_price}), product still on site."
                     ),
                 }
 
     # ─────────────────────────────────────────────────────────
-    # Priority 2: Both agents agree the product is gone
-    # (both redirected AND both have null price)
-    # ─────────────────────────────────────────────────────────
-    both_say_gone = (
-        a1_redirected and a2_redirected
-        and a1_price is None and a2_price is None
-    )
-    if both_say_gone:
-        if row_type == "refresh_data":
-            return {
-                "remark_l1": "Missing-remove",
-                "remark_l2": None,
-                "decision": "AUTO_PRODUCT_GONE",
-                "reasoning": "Both agents redirected and found no price; product gone.",
-            }
-        else:  # missing_in_crawl
-            return {
-                "remark_l1": "OK, missing",
-                "remark_l2": None,
-                "decision": "AUTO_CONFIRMED_MISSING",
-                "reasoning": "Both agents confirmed product is no longer on site.",
-            }
-
-    # ─────────────────────────────────────────────────────────
-    # Priority 3: Anything else → manual review
-    # (price disagreement, one null, one redirect / one not without
-    #  agreeing prices, page blocked, etc.)
+    # P4. Anything else -> manual review
+    # (medium/low confidence, null price without redirect, etc.)
     # ─────────────────────────────────────────────────────────
     return {
         "remark_l1": original_remark_l1,
         "remark_l2": MANUAL_TAG,
         "decision": "LOW_CONFIDENCE_NEEDS_REVIEW",
         "reasoning": (
-            f"Agent 1: redirect={a1_redirected}, price={a1_price}. "
-            f"Agent 2: redirect={a2_redirected}, price={a2_price}. "
-            "Cannot reconcile automatically."
+            f"Confidence={confidence}, price={price}, redirected={redirected}. "
+            "Single-agent pipeline escalates anything below 'high' confidence."
         ),
     }
-
-def _format_price(price: float) -> str:
-    """Format a price number for writing to Remark L2."""
-    # Drop trailing .0 if integer-valued
-    if price == int(price):
-        return str(int(price))
-    return f"{price:.2f}"
