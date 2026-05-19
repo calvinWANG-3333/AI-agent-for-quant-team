@@ -1,11 +1,21 @@
-# agent
-browser-use>=0.1.0
+# ============================================================
+# Luxury Price Reconciliation Agent — Core Dependencies
+# Pinned for browser-use 0.12.7 compatibility.
+# ============================================================
+
+# Core Automation & AI Agent Frameworks
+browser-use==0.12.7
 playwright>=1.40.0
 
-# llm
+# LLM Orchestration (used by browser-use internally, kept explicit)
+# Note: browser-use 0.12.7 brings its own LLM client (browser_use.llm),
+# we no longer use langchain_anthropic directly in agent_1.py.
+# Keeping it pinned just in case for compatibility with browser-use deps.
 langchain-anthropic>=0.1.0
 
-# excel & data processing
+# Data Engineering
 pandas>=2.0.0
 openpyxl>=3.1.0
+
+# Schema & Validation
 pydantic>=2.0.0
