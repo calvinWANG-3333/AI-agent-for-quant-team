@@ -11,6 +11,65 @@ from agent_1 import verify_price_with_agent_1
 from reconcile import reconcile
 from excel_writer import make_output_path, write_reconciliation
 
+# ============================================================
+# Fail-fast environment checks
+# Run these BEFORE doing anything expensive (like loading Excel
+# or starting the browser). If a teammate forgot to set up their
+# API key, we want to tell them immediately, not after they've
+# already waited 30 seconds for the browser to launch.
+# ============================================================
+import os
+import sys
+
+
+def _check_environment() -> None:
+    """Verify all required environment variables and config before run."""
+    errors = []
+
+    # 1. Anthropic API key must be present
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        errors.append(
+            "ANTHROPIC_API_KEY is not set in your environment.\n"
+            "  → See README section 'API Key Configuration' for setup.\n"
+            "  → On macOS: add `export ANTHROPIC_API_KEY=\"sk-ant-...\"` "
+            "to ~/.zshrc, then `source ~/.zshrc`."
+        )
+    elif not api_key.startswith("sk-ant-"):
+        errors.append(
+            f"ANTHROPIC_API_KEY is set but doesn't look like a Claude key.\n"
+            f"  → Expected prefix: 'sk-ant-...'\n"
+            f"  → Got prefix: '{api_key[:10]}...'\n"
+            f"  → Did you accidentally paste an OpenAI or other key?"
+        )
+
+    # 2. Input Excel file must exist
+    if not os.path.exists("To_be_update.xlsx"):
+        errors.append(
+            "Input file 'To_be_update.xlsx' not found in current directory.\n"
+            f"  → Current directory: {os.getcwd()}\n"
+            "  → Make sure you ran the script from the project root."
+        )
+
+    # 3. Report and abort if anything is wrong
+    if errors:
+        print("\n" + "=" * 70)
+        print("❌ Cannot start: environment is not configured correctly.")
+        print("=" * 70)
+        for i, msg in enumerate(errors, 1):
+            print(f"\n[{i}] {msg}")
+        print("\n" + "=" * 70 + "\n")
+        sys.exit(1)
+
+    # All clear
+    print("✓ Environment checks passed:")
+    print(f"  - ANTHROPIC_API_KEY: present ({api_key[:10]}...)")
+    print(f"  - Input file:        To_be_update.xlsx")
+    print()
+
+
+# Run checks immediately at import time
+_check_environment()
 
 INPUT_XLSX = "To_be_update.xlsx"
 
