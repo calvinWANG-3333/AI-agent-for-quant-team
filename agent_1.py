@@ -78,7 +78,7 @@ class PriceVerificationResult(BaseModel):
     currency_found: Optional[str] = Field(
         default=None,
         description=(
-            "Currency as a 3-letter ISO code (EUR, USD, GBP, JPY, CNY). "
+            "Currency as a 3-letter ISO code (EUR, USD, GBP, JPY, CNY....). "
             "Return null if price_found is null."
         )
     )
@@ -177,6 +177,31 @@ When blocked, return:
   confidence        = "low"
 
 A blocked page will NEVER load. Recognize quickly and exit.
+
+==========================================================================
+COMMON PRE-CONTENT INTERSTITIALS (handle quickly, don't dwell)
+==========================================================================
+
+Luxury sites often show one of these BEFORE the product page renders,
+especially when accessed from a different region than the URL's market:
+
+  - Cookie consent banner ("Accept all cookies" or "Accept" button)
+  - Region/country selector ("You are visiting from X, continue to Y?"
+    or a list of countries with flags)
+  - Newsletter signup popup with an "X" close button
+  - Age gate or terms-of-service confirmation
+
+If you see any of these, dismiss them quickly:
+  - Cookie banner: click "Accept" / "Accept all" / "OK"
+  - Region selector: pick the country that matches the URL's market
+    (e.g. fr_fr URL -> France; en_us URL -> United States; gb URL ->
+    United Kingdom)
+  - Newsletter / age gate: click the close button (X) or "No thanks"
+
+Do NOT spend more than 2 steps on interstitials. After 2 dismissal
+attempts, proceed to read the product page regardless of leftover
+popups. Cookie banners that won't dismiss usually don't block the
+main content underneath.
 
 ==========================================================================
 STEPS (if not blocked)
@@ -287,4 +312,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
