@@ -206,19 +206,47 @@ async def main():
         excel_row_index = int(row.name) + 2
         sample_rows.append((row, excel_row_index))
 
-    print(f"\nWill process {len(sample_rows)} rows:")
+    # ============================================================
+    # Parallel execution with concurrency cap.
+    #
+    # Each task = one Chromium + one Claude call. The semaphore
+    # ensures we never have more than MAX_CONCURRENT running at
+    # once, which protects against:
+    #   - RAM exhaustion (each browser ~300MB)
+    #   - Anthropic per-minute token rate limits
+    #   - System file descriptor exhaustion
+    #
+    # Start with 3 (conservative). If stable, bump to 5.
+    # ============================================================
+    MAX_CONCURRENT = 3
+    sem = asyncio.Semaphore(MAX_CONCURRENT)
+
+    print(f"\nWill process {len(sample_rows)} rows in parallel "
+          f"(max {MAX_CONCURRENT} concurrent):")
     for row, idx in sample_rows:
         print(f"  - [row {idx}] {row['Brand']} / {row['Market']}")
 
+    async def process_with_limit(row, excel_row_index, label):
+        """Wrapper: hold semaphore while one row is being processed."""
+        async with sem:
+            try:
+                return await process_one_row(row, excel_row_index, label)
+            except Exception as e:
+                print(f"\n❌ Row {excel_row_index} failed with exception: {e}")
+                return None
+
     t_start = time.time()
-    updates = []
-    for i, (row, excel_row_index) in enumerate(sample_rows, 1):
-        label = f"[{i}/{len(sample_rows)}]"
-        try:
-            update = await process_one_row(row, excel_row_index, label)
-            updates.append(update)
-        except Exception as e:
-            print(f"\n❌ Row {excel_row_index} failed with exception: {e}")
+
+    # Launch ALL tasks at once. The semaphore inside process_with_limit
+    # holds the rest back so only MAX_CONCURRENT actually run.
+    tasks = [
+        process_with_limit(row, idx, f"[{i+1}/{len(sample_rows)}]")
+        for i, (row, idx) in enumerate(sample_rows)
+    ]
+    raw_results = await asyncio.gather(*tasks)
+
+    # Filter out the Nones from failed rows
+    updates = [r for r in raw_results if r is not None]
 
     total_elapsed = time.time() - t_start
 
@@ -236,7 +264,6 @@ async def main():
     print_summary(updates, total_elapsed)
 
     print(f"\n✅ Output: {output_path}")
-
 
 if __name__ == "__main__":
     asyncio.run(main())
