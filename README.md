@@ -37,7 +37,7 @@ arch
 #### Step 2: Purge Conflicted Virtual Environments
 Navigate to the repository root and destroy any pre-existing, poisoned virtual environments:
 ```bash
-cd /path/to/your/agent_project
+cd ~/path/to/your/agent_project
 rm -rf .venv
 ```
 
