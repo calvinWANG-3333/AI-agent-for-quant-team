@@ -220,7 +220,7 @@ python run_demo.py
 ---
 ## 📥 Input Preparation Guide (`To_be_update.xlsx`)
  
-The runner is **stateless**: it does not query the LY platform, does not crawl, and does not decide what to verify. It expects a hand-prepared Excel file named **exactly** `To_be_update.xlsx` in the project root. The quality of the run depends entirely on the quality of this file.
+Always refer to Ruihang's sample input file **Sample_To_be_update.xlsx**. Agent expects a hand-prepared Excel file named **exactly** `To_be_update.xlsx` in the project root. The quality of the run **depends entirely on the quality of this file.**
  
 ### 1. Source of the input file
 Start from the standard `evolution` sheet produced by the legacy Price Check report (`price_check_tool_all_brands_-_VXII.py`). The agent consumes the **same column schema**: `Url`, `Name`, `Brand`, `Market`, `currency_s`, `Original Price_validated`, `status`, `Remarks L1`, `Remarks L2 (details)`. **Do not rename, reorder, or delete these columns** — the writer locates `Remarks L1` and `Remarks L2 (details)` by header name and will refuse to start if either is missing.
