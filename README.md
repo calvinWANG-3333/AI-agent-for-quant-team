@@ -282,7 +282,7 @@ Apply these filters in the order listed:
 
 | # | Action | Reason |
 | --- | --- | --- |
-| 1 | **Keep only `status == "Missing in crawl"` OR `Remarks L1 == "Refresh data"`** | These are the only two row types the reconciliation logic in `reconcile.py` knows how to handle. Any other row will be silently skipped. |
+| 1 | **Keep only `status == "Missing in crawl"` OR `Remarks L1 == "Refresh data"`** | These are the only two row types the reconciliation logic in `reconcile.py` knows how to handle: **refresh data(data outside of delivery range) and pure missing in crawl data(with status of missing in crawl and no compensating pair in new addition)** . Any other row will be skipped. |
 | 2 | **Drop every row where `Brand == "Loewe"`** | Loewe requires region switching that the headless browser cannot perform. Loewe rows are 100% human-owned. |
 | 3 | **Drop `Audemars Piguet` (AP) rows** | AP data comes directly from the brand feed, not from a re-crawl, so it must not be flagged as `Refresh data` in the first place. |
 | 4 | **Drop `Hermès` rows where data originates from in-store collection** | Per the onboarding guide §3.2.3, Hermès store data must not be modified. |
