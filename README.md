@@ -286,7 +286,7 @@ Apply these filters in the order listed:
 | 2 | **Drop every row where `Brand == "Loewe"`** | Loewe requires region switching that the headless browser cannot perform. Loewe rows are 100% human-owned. |
 | 3 | **Drop `Audemars Piguet` (AP) rows** | AP data comes directly from the brand feed, not from a re-crawl, so it must not be flagged as `Refresh data` in the first place. |
 | 4 | **Drop `Hermès` rows where data originates from in-store collection** | Per the onboarding guide §3.2.3, Hermès store data must not be modified. |
-| 5 | **Drop rows already reviewed by a human in this delivery cycle** | If `Remarks L1` or `Remarks L2 (details)` already contains a non-blank manual note, the agent will overwrite it. Filter these out. |
+| 5 | **Drop rows already reviewed by a human in this delivery cycle** | For **missing in crawl data** If `Remarks L1` or `Remarks L2 (details)` already contains a non-blank manual note, or for **refresh data** if `Remarks L2 (details)` already contains info, the agent will overwrite it. Filter these out. In another word: For **missing in crawl data**, keep `Remarks L1` or `Remarks L2 (details)` blank, for **refresh data**, keep `Remarks L2 (details)` empty and `Remarks L1` remained as refresh data |
 | 6 | **Save as `To_be_update.xlsx` in the project root** | The filename is enforced by `run_demo.py`. |
 
 The runner performs a **pre-flight scan** at startup and prints a warning if any rows from `EXCLUDED_BRANDS` slipped through, but it will not auto-remove them — the operator is expected to know.
