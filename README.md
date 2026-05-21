@@ -37,7 +37,7 @@ arch
 #### Step 2: Purge Conflicted Virtual Environments
 Navigate to the repository root and destroy any pre-existing, poisoned virtual environments:
 ```bash
-cd /path/to/your/agent_project
+cd ~/path/to/your/agent_project
 rm -rf .venv
 ```
 
@@ -104,8 +104,7 @@ uv run playwright install chromium
 This agent utilizes the Anthropic Claude API via `browser-use` to drive intelligent web navigation. You must configure your Claude API key as an environment variable before running `run_demo.py`. The orchestration script will explicitly refuse to boot if the key is missing to prevent silent failures mid-run.
 
 > [!IMPORTANT]
-> **Mental model — `venv` and environment variables are two unrelated things.**
-> Newcomers frequently ask: *"Should I activate `.venv` first, then configure the key? Or configure it globally?"* The question is malformed.
+> **`venv` and environment variables are two unrelated things.**
 > * `venv` **only isolates Python packages** (where `pandas`, `playwright`, etc. live on disk). It has **no influence whatsoever** on shell environment variables.
 > * `export ANTHROPIC_API_KEY=...` is a **shell-level** instruction. Whether your venv is activated or not, any Python process started from that shell can read it via `os.environ.get("ANTHROPIC_API_KEY")`.
 >
@@ -222,7 +221,7 @@ If the terminal prints `OK: Client initialized`, your integration layer is fully
 
 ## 📋 Standard Dependency Ledger (`requirements.txt`)
 
-Ensure your root `requirements.txt` file is structured precisely as follows to maintain the optimized Single-Agent configuration footprint:
+Ensure your root `requirements.txt` file is structured precisely as follows to maintain the optimized Single-Agent configuration footprint also ensure that `requirements.txt` file is under the same file path with the main program:
 
 ```text
 # ============================================================
